@@ -1,0 +1,175 @@
+Compliance
+
+1. Microsserviço
+
+Microsserviço:
+
+    Nome do domínio (Bounded Context):
+
+        compliance
+
+    Nome do microsserviço (repositório):
+
+        via-fluvial-api-compliance
+
+    Service Slug:
+
+        compliance
+
+Configuração de Build (pom.xml):
+
+    groupId:
+
+        br.com.viafluvial
+
+    artifactId:
+
+        api-compliance
+
+    name:
+
+        api-compliance
+
+    description:
+
+        Microsserviço responsável pelo domínio de compliance, incluindo criação, consulta e gestão do ciclo de vida de compliance, implementado com Java 21 e Spring Boot, seguindo DDD, Clean Architecture e API-First (OpenAPI 3.1). Integra-se explicitamente com outros microsserviços da plataforma por meio de contratos bem definidos, garantindo evolução segura e alta confiabilidade.
+
+Estrutura da Aplicação:
+
+    Pacote base Java:
+
+        br.com.viafluvial.compliance
+
+API:
+
+    Versão da API:
+
+        v1
+
+    Base path:
+
+        /api/v1
+
+    Context path da aplicação:
+
+        /
+
+Execução da Aplicação em Container:
+
+    Porta interna do container (Spring Boot):
+
+        8080
+
+    Porta exposta no host (cluster):
+
+        18003
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Ambiente de Execução:
+
+    Ambientes suportados:
+
+        dsv
+
+        hml
+
+        prd
+
+Conectividade da Aplicação:
+
+    Host interno (dentro do cluster Swarm):
+
+        api-compliance
+
+    Porta interna:
+
+        8080
+
+    Host externo (acesso via API Gateway):
+
+        api-gateway.prd.viafluvial.com.br
+
+    Endpoint externo (Gateway – público):
+
+        https://api-gateway.prd.viafluvial.com.br/api/v1/compliance/{id}
+
+    Endpoint interno (Backend – rede interna):
+
+        https://api-compliance.prd.viafluvial.com.br/api/v1/compliance/{id}
+
+Identidade do Serviço:
+
+    Nome lógico do serviço (service.name):
+
+        api-compliance
+
+    Namespace / Domínio organizacional:
+
+        viafluvial
+
+2. Banco de Dados
+
+Microsserviço:
+
+    Engine:
+
+        PostgreSQL
+
+    Modelo de Persistência:
+
+        Banco de dados dedicado por microsserviço (1:1)
+
+    Nome do banco de dados:
+
+        db-compliance
+
+    Usuário do banco:
+
+        compliance_app
+
+    Schema:
+
+        sc-compliance
+
+Execução em Container:
+
+    Nome do container do banco:
+
+        postgres-compliance
+
+    Porta interna do container (PostgreSQL):
+
+        5432
+
+    Porta exposta no host (cluster):
+
+        15434
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Conectividade:
+
+    Host interno (dentro do cluster Swarm):
+
+        postgres-compliance
+
+    Porta interna:
+
+        5432
+
+    Host externo (acesso inter-cluster, quando aplicável):
+
+        <NODE_IP | LB_DNS>
+
+    Porta externa:
+
+        15434
+
+    URL JDBC (resolvida por variáveis de ambiente):
+
+        jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}

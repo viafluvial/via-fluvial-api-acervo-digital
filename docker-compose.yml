@@ -1,0 +1,42 @@
+services:
+  api-acervo-digital:
+    build:
+      context: .
+    container_name: api-acervo-digital
+    networks:
+      - vfa-shared-db_default
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dsv}
+      VFA_ENABLE_SEEDS: ${VFA_ENABLE_SEEDS:-false}
+      VFA_SQL_INIT_MODE: ${VFA_SQL_INIT_MODE:-never}
+      VFA_FLYWAY_SEED_SUFFIX: ${VFA_FLYWAY_SEED_SUFFIX:-}
+      DB_HOST: ${DB_HOST:-172.17.0.1}
+      DB_PORT: ${DB_PORT:-15432}
+      DB_NAME: ${DB_NAME:-db-acervo-digital}
+      DB_SCHEMA: ${DB_SCHEMA:-sc-acervo-digital}
+      DB_USERNAME: ${DB_USERNAME:-vfa_app}
+      DB_PASSWORD: ${DB_PASSWORD:-vfa_app}
+      SECURITY_MODE: ${SECURITY_MODE:-dev}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:-http://keycloak:8080/realms/viafluvial}
+      JWT_JWK_SET_URI: ${JWT_JWK_SET_URI:-http://keycloak:8080/realms/viafluvial/protocol/openid-connect/certs}
+      API_EMBARCACOES_BASE_URL: ${API_EMBARCACOES_BASE_URL:-http://172.17.0.1:18006}
+      ACERVO_STORAGE_PROVIDER: ${ACERVO_STORAGE_PROVIDER:-gcp}
+      ACERVO_GCP_PROJECT_ID: ${ACERVO_GCP_PROJECT_ID:-vfa-plataforma-prd-k0ru}
+      ACERVO_GCP_CREDENTIALS_FILE: ${ACERVO_GCP_CREDENTIALS_FILE:-/app/secrets/gcp-sa.json}
+      ACERVO_QUARANTINE_BUCKET: ${ACERVO_QUARANTINE_BUCKET:-viafluvial-acervo-digital-quarantine-prd}
+      ACERVO_PUBLIC_MEDIA_BUCKET: ${ACERVO_PUBLIC_MEDIA_BUCKET:-viafluvial-acervo-digital-public-media-prd}
+      ACERVO_PRIVATE_DOCUMENTS_BUCKET: ${ACERVO_PRIVATE_DOCUMENTS_BUCKET:-viafluvial-acervo-digital-private-documents-prd}
+      ACERVO_CDN_BASE_URL: ${ACERVO_CDN_BASE_URL:-https://cdn.viafluvial.com.br}
+      ACERVO_WATERMARK_ENABLED: ${ACERVO_WATERMARK_ENABLED:-true}
+      ACERVO_WATERMARK_OPACITY: ${ACERVO_WATERMARK_OPACITY:-0.90}
+      ACERVO_WATERMARK_SCALE_RATIO: ${ACERVO_WATERMARK_SCALE_RATIO:-0.24}
+      ACERVO_WATERMARK_MARGIN_RATIO: ${ACERVO_WATERMARK_MARGIN_RATIO:-0.01}
+    ports:
+      - "${API_PORT_EXTERNAL:-18019}:8080"
+    volumes:
+      - ./storage:/app/storage
+      - ${ACERVO_GCP_CREDENTIALS_HOST_FILE:-./src/main/resources/credentials/sa.json}:/app/secrets/gcp-sa.json:ro
+
+networks:
+  vfa-shared-db_default:
+    external: true

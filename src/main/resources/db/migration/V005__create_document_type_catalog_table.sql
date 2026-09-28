@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS "sc-acervo-digital".document_type_catalog (
+  code VARCHAR(80) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  scope VARCHAR(40) NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

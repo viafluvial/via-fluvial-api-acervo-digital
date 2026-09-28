@@ -1,0 +1,10 @@
+target/
+storage/
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+*.log
+.env
+.idea/
+.vscode/
+.DS_Store
+src/main/resources/credentials/sa.json

@@ -1,0 +1,8 @@
+spring:
+  flyway:
+    locations: classpath:db/migration${VFA_FLYWAY_SEED_SUFFIX:}
+
+logging:
+  level:
+    root: INFO
+    "[br.com.viafluvial.acervodigital]": DEBUG

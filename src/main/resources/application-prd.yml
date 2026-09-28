@@ -1,0 +1,12 @@
+spring:
+  flyway:
+    ignore-migration-patterns: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}
+
+logging:
+  level:
+    root: INFO
+    "[br.com.viafluvial.acervodigital]": INFO
+
+acervo:
+  storage:
+    provider: ${ACERVO_STORAGE_PROVIDER:gcp}

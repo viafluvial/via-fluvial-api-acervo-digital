@@ -1,0 +1,101 @@
+Administração da Plataforma
+
+1. Microsserviço
+
+Microsserviço:
+
+    Nome do domínio (Bounded Context):
+
+        acervo-digital
+
+    Nome do microsserviço (repositório):
+
+        via-fluvial-api-acervo-digital
+
+    Service Slug:
+
+        acervo-digital
+
+Configuração de Build (pom.xml):
+
+    groupId:
+
+        br.com.viafluvial
+
+    artifactId:
+
+        api-acervo-digital
+
+    name:
+
+        api-acervo-digital
+
+    description:
+
+        Microsserviço responsável pelo domínio de acervo digital, incluindo upload, consulta, aprovação, reprovação, publicação e gestão do ciclo de vida de imagens, vídeos e documentos da plataforma Via Fluvial. Controla mídias públicas, documentos privados, quarentena, metadados, vínculos com barqueiros, embarcações e acomodações, além de integração com buckets, CDN e URLs assinadas.
+
+Estrutura da Aplicação:
+
+    Pacote base Java:
+
+        br.com.viafluvial.acervodigital
+
+API:
+
+    Versão da API:
+
+        v1
+
+    Base path:
+
+        /api/v1
+
+    Context path da aplicação:
+
+        /
+
+Execução da Aplicação em Container:
+
+    Porta interna do container (Spring Boot):
+
+        8080
+
+    Porta exposta no host (cluster):
+
+        18019
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Ambiente de Execução:
+
+    Ambientes suportados:
+
+        dsv
+
+        hml
+
+        prd
+
+Conectividade da Aplicação:
+
+    Host interno (dentro do cluster Swarm):
+
+        api-acervo-digital
+
+    Porta interna:
+
+        8080
+
+    Host externo (acesso via API Gateway):
+
+        api-gateway.prd.viafluvial.com.br
+
+    Endpoint externo (Gateway – público):
+
+        https://api-gateway.prd.viafluvial.com.br/api/v1/acervo-digital/{id}
+
+    Endpoint interno (Backend – rede interna):
+
+        https://api-acervo-digital.prd.viafluvial.com.br/api/v1/acervo-digital/{id}

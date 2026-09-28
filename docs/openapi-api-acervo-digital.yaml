@@ -1,0 +1,1936 @@
+openapi: 3.1.0
+info:
+  title: API Acervo Digital - Via Fluvial
+  version: 1.0.0
+  summary: Contrato OpenAPI do microsserviço api-acervo-digital.
+  description: |
+    API responsável pelo domínio de Acervo Digital da plataforma Via Fluvial.
+
+    O serviço controla imagens, vídeos e documentos vinculados a barqueiros,
+    embarcações, acomodações, campanhas, site e demais entidades da plataforma.
+
+    Regras centrais de negócio:
+      - arquivos enviados por usuários externos entram em quarentena;
+      - imagens e vídeos não são publicados automaticamente;
+      - mídias públicas dependem de aprovação administrativa;
+      - documentos privados nunca são expostos via CDN pública;
+      - o acesso a documentos privados ocorre por fluxo autenticado ou URL assinada;
+      - CPF/CNPJ não devem ser usados em URLs, nomes públicos ou caminhos de objeto;
+      - todo item deve manter vínculo, finalidade, visibilidade, status e rastreabilidade.
+
+    Este contrato expõe apenas o comportamento de negócio do Acervo Digital.
+    O cadastro de barqueiros, embarcações, acomodações e campanhas pertence aos
+    respectivos microsserviços de domínio.
+  contact:
+    name: Via Fluvial
+    url: https://viafluvial.com.br
+servers:
+  - url: /api/v1
+    description: Runtime de Desenvolvimento
+  - url: https://api-acervo-digital.hml.viafluvial.com.br/api/v1
+    description: Runtime de Homologação
+  - url: https://api-acervo-digital.prd.viafluvial.com.br/api/v1
+    description: Runtime de Produção
+security:
+  - bearerAuth: []
+tags:
+  - name: Media
+    description: Upload, consulta e gestão de imagens e vídeos do acervo.
+  - name: MediaApproval
+    description: Aprovação, reprovação, publicação, bloqueio e arquivamento de mídias.
+  - name: Documents
+    description: Upload, consulta e acesso controlado a documentos privados.
+  - name: DocumentApproval
+    description: Aprovação, reprovação e controle de validade documental.
+  - name: Catalogs
+    description: Catálogos de tipos, finalidades, status e motivos padronizados.
+  - name: Queries
+    description: Consultas de fila, histórico, relatórios e visões de apoio ao negócio.
+paths:
+  /acervo/media/uploads:
+    post:
+      tags:
+        - Media
+      operationId: uploadMedia
+      summary: Enviar imagem ou vídeo para o acervo.
+      description: |
+        Recebe uma imagem ou vídeo e registra o item no Acervo Digital.
+        O arquivo enviado entra inicialmente em quarentena e não deve ser publicado
+        automaticamente. A mídia somente poderá ser exibida publicamente após aprovação
+        administrativa e publicação.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MediaUploadRequest'
+      responses:
+        '201':
+          description: Mídia recebida e registrada em quarentena.
+          headers:
+            Location:
+              description: URL de consulta do recurso criado.
+              schema:
+                type: string
+                example: /api/v1/acervo/media/med_01JABCDEF1234567890
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/media:
+    get:
+      tags:
+        - Media
+      operationId: searchMedia
+      summary: Consultar mídias do acervo.
+      description: |
+        Retorna imagens e vídeos cadastrados no Acervo Digital com filtros de negócio.
+        Pode ser usado pelo painel administrativo, por serviços internos e por fluxos
+        que precisam listar mídias conforme entidade, status, finalidade e visibilidade.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/EntityTypeQuery'
+        - $ref: '#/components/parameters/EntityIdQuery'
+        - $ref: '#/components/parameters/MediaTypeQuery'
+        - $ref: '#/components/parameters/PurposeQuery'
+        - $ref: '#/components/parameters/VisibilityQuery'
+        - $ref: '#/components/parameters/StatusQuery'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/SizeQuery'
+        - $ref: '#/components/parameters/SortQuery'
+      responses:
+        '200':
+          description: Lista paginada de mídias.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedMediaResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /acervo/media/{mediaPublicKey}:
+    get:
+      tags:
+        - Media
+      operationId: getMediaByPublicKey
+      summary: Consultar uma mídia específica.
+      description: |
+        Retorna os metadados completos de uma mídia cadastrada, incluindo status,
+        vínculos de negócio, finalidade, visibilidade, arquivos derivados e histórico
+        resumido de publicação.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      responses:
+        '200':
+          description: Mídia localizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItemResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /acervo/entities/{entityType}/{entityId}/media:
+    get:
+      tags:
+        - Media
+      operationId: listMediaByEntity
+      summary: Listar mídias vinculadas a uma entidade.
+      description: |
+        Lista mídias associadas a uma entidade de negócio, como embarcação,
+        acomodação, barqueiro, campanha ou página do site. Por padrão, os consumidores
+        externos devem utilizar apenas mídias publicadas.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/EntityTypePath'
+        - $ref: '#/components/parameters/EntityIdPath'
+        - $ref: '#/components/parameters/OnlyPublishedQuery'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/SizeQuery'
+      responses:
+        '200':
+          description: Mídias vinculadas à entidade.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedMediaResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /acervo/media/{mediaPublicKey}/approve:
+    post:
+      tags:
+        - MediaApproval
+      operationId: approveMedia
+      summary: Aprovar mídia.
+      description: |
+        Aprova uma imagem ou vídeo após análise administrativa. A aprovação libera a
+        mídia para a próxima etapa de publicação, mas não implica obrigatoriamente que
+        ela já esteja disponível na CDN.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+      responses:
+        '200':
+          description: Mídia aprovada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/media/{mediaPublicKey}/reject:
+    post:
+      tags:
+        - MediaApproval
+      operationId: rejectMedia
+      summary: Reprovar mídia.
+      description: |
+        Reprova uma mídia em análise. A reprovação exige motivo padronizado e pode
+        conter observação administrativa. Mídias reprovadas não podem ser exibidas
+        publicamente nem utilizadas em marketing.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectionDecisionRequest'
+      responses:
+        '200':
+          description: Mídia reprovada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/media/{mediaPublicKey}/publish:
+    post:
+      tags:
+        - MediaApproval
+      operationId: publishMedia
+      summary: Publicar mídia aprovada.
+      description: |
+        Publica uma mídia previamente aprovada. Após a publicação, a mídia pode ser
+        disponibilizada para consumo público conforme sua visibilidade, finalidade e
+        URLs de CDN geradas.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishMediaRequest'
+      responses:
+        '200':
+          description: Mídia publicada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItemResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/media/{mediaPublicKey}/block:
+    post:
+      tags:
+        - MediaApproval
+      operationId: blockMedia
+      summary: Bloquear mídia publicada ou aprovada.
+      description: |
+        Bloqueia uma mídia por risco, reclamação, violação de direito de uso,
+        inconsistência documental ou decisão administrativa. Mídias bloqueadas não
+        devem aparecer no fluxo de venda, site, marketing ou integrações públicas.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockMediaRequest'
+      responses:
+        '200':
+          description: Mídia bloqueada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /acervo/media/{mediaPublicKey}/archive:
+    post:
+      tags:
+        - MediaApproval
+      operationId: archiveMedia
+      summary: Arquivar mídia.
+      description: |
+        Arquiva uma mídia que não deve mais ser usada operacionalmente. O arquivamento
+        não representa exclusão física imediata e deve respeitar política de retenção.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRequest'
+      responses:
+        '200':
+          description: Mídia arquivada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /acervo/media/{mediaPublicKey}/main:
+    patch:
+      tags:
+        - Media
+      operationId: setMainMedia
+      summary: Definir mídia como principal.
+      description: |
+        Define ou remove a mídia como principal para a entidade vinculada. Quando uma
+        nova mídia é definida como principal, as demais mídias da mesma entidade e
+        finalidade podem perder a marcação de principal conforme regra de negócio.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMainMediaRequest'
+      responses:
+        '200':
+          description: Mídia principal atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItemResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /acervo/media/{mediaPublicKey}/order:
+    patch:
+      tags:
+        - Media
+      operationId: updateMediaOrder
+      summary: Atualizar ordem de exibição da mídia.
+      description: |
+        Atualiza a posição de exibição da mídia dentro da galeria ou lista da entidade
+        relacionada.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/MediaPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderRequest'
+      responses:
+        '200':
+          description: Ordem atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaItemResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /acervo/private-documents/uploads:
+    post:
+      tags:
+        - Documents
+      operationId: uploadPrivateDocument
+      summary: Enviar documento privado.
+      description: |
+        Recebe documento privado de barqueiro, embarcação, agência ou outro contexto
+        administrativo. Documentos privados nunca devem ser expostos em CDN pública.
+        O acesso deve ser autenticado ou realizado por URL assinada temporária.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivateDocumentUploadRequest'
+      responses:
+        '201':
+          description: Documento recebido e registrado.
+          headers:
+            Location:
+              description: URL de consulta do documento criado.
+              schema:
+                type: string
+                example: /api/v1/acervo/private-documents/doc_01JABCDEF1234567890
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateDocumentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/private-documents:
+    get:
+      tags:
+        - Documents
+      operationId: searchPrivateDocuments
+      summary: Consultar documentos privados.
+      description: |
+        Retorna documentos privados conforme filtros de entidade, tipo documental,
+        status e validade. O retorno não deve expor URL pública permanente do arquivo.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/EntityTypeQuery'
+        - $ref: '#/components/parameters/EntityIdQuery'
+        - name: documentTypeCode
+          in: query
+          required: false
+          description: Código do tipo documental.
+          schema:
+            type: string
+            example: LICENCA_OPERACAO
+        - name: status
+          in: query
+          required: false
+          description: Status do documento.
+          schema:
+            $ref: '#/components/schemas/DocumentStatus'
+        - name: expiresUntil
+          in: query
+          required: false
+          description: Filtra documentos com validade até a data informada.
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/SizeQuery'
+      responses:
+        '200':
+          description: Lista paginada de documentos privados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedPrivateDocumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /acervo/private-documents/{documentPublicKey}:
+    get:
+      tags:
+        - Documents
+      operationId: getPrivateDocumentByPublicKey
+      summary: Consultar documento privado.
+      description: |
+        Retorna os metadados de um documento privado, incluindo vínculo de negócio,
+        status, validade e histórico resumido. O conteúdo do arquivo não é retornado
+        neste endpoint.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/DocumentPublicKeyPath'
+      responses:
+        '200':
+          description: Documento localizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivateDocumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /acervo/private-documents/{documentPublicKey}/signed-url:
+    post:
+      tags:
+        - Documents
+      operationId: createPrivateDocumentSignedUrl
+      summary: Gerar URL assinada para documento privado.
+      description: |
+        Gera uma URL temporária para acesso controlado ao conteúdo do documento
+        privado. A URL deve ter tempo de expiração limitado e não deve ser usada para
+        documentos públicos permanentes.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/DocumentPublicKeyPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedUrlRequest'
+      responses:
+        '200':
+          description: URL assinada gerada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedUrlResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /acervo/private-documents/{documentPublicKey}/approve:
+    post:
+      tags:
+        - DocumentApproval
+      operationId: approvePrivateDocument
+      summary: Aprovar documento privado.
+      description: |
+        Aprova um documento privado após análise administrativa ou de compliance.
+        Documentos aprovados podem liberar fluxos operacionais conforme regras de
+        outros domínios, mas permanecem privados.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/DocumentPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+      responses:
+        '200':
+          description: Documento aprovado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/private-documents/{documentPublicKey}/reject:
+    post:
+      tags:
+        - DocumentApproval
+      operationId: rejectPrivateDocument
+      summary: Reprovar documento privado.
+      description: |
+        Reprova um documento privado com motivo padronizado. A reprovação pode gerar
+        pendência operacional para o barqueiro, embarcação ou entidade relacionada.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/DocumentPublicKeyPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectionDecisionRequest'
+      responses:
+        '200':
+          description: Documento reprovado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /acervo/document-types:
+    get:
+      tags:
+        - Catalogs
+      operationId: listDocumentTypes
+      summary: Listar tipos documentais exigidos.
+      description: |
+        Retorna o catálogo de tipos de documentos aceitos pelo Acervo Digital,
+        informando escopo, obrigatoriedade, necessidade de validade e exigência de
+        aprovação.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: scope
+          in: query
+          required: false
+          description: Escopo do tipo documental.
+          schema:
+            $ref: '#/components/schemas/DocumentScope'
+        - name: active
+          in: query
+          required: false
+          description: Filtra tipos ativos ou inativos.
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Tipos documentais retornados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentTypeResponse'
+  /acervo/catalogs/rejection-reasons:
+    get:
+      tags:
+        - Catalogs
+      operationId: listRejectionReasons
+      summary: Listar motivos padronizados de reprovação.
+      description: Retorna motivos padronizados para reprovação de mídias e documentos.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: targetType
+          in: query
+          required: false
+          description: Tipo alvo do motivo de reprovação.
+          schema:
+            type: string
+            enum:
+              - MEDIA
+              - DOCUMENT
+              - BOTH
+            example: MEDIA
+      responses:
+        '200':
+          description: Motivos de reprovação retornados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RejectionReasonResponse'
+  /acervo/approval-queue:
+    get:
+      tags:
+        - Queries
+      operationId: getApprovalQueue
+      summary: Consultar fila de aprovação.
+      description: |
+        Retorna mídias e documentos pendentes de análise administrativa ou de
+        compliance. A fila pode ser filtrada por tipo, status, entidade, finalidade e
+        data de envio.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: itemType
+          in: query
+          required: false
+          description: Tipo de item na fila.
+          schema:
+            type: string
+            enum:
+              - MEDIA
+              - DOCUMENT
+            example: MEDIA
+        - $ref: '#/components/parameters/EntityTypeQuery'
+        - $ref: '#/components/parameters/EntityIdQuery'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/SizeQuery'
+      responses:
+        '200':
+          description: Fila de aprovação retornada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedApprovalQueueResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /acervo/items/{itemPublicKey}/history:
+    get:
+      tags:
+        - Queries
+      operationId: getAcervoItemHistory
+      summary: Consultar histórico de decisões do item.
+      description: |
+        Retorna o histórico de decisões e alterações de status de uma mídia ou
+        documento, incluindo aprovação, reprovação, publicação, bloqueio e arquivamento.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: itemPublicKey
+          in: path
+          required: true
+          description: Identificador público do item do acervo.
+          schema:
+            type: string
+            example: med_01JABCDEF1234567890
+      responses:
+        '200':
+          description: Histórico retornado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AcervoHistoryEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /acervo/reports/pending-items:
+    get:
+      tags:
+        - Queries
+      operationId: getPendingItemsReport
+      summary: Consultar relatório de pendências do acervo.
+      description: |
+        Retorna indicadores de pendências de mídias e documentos, útil para gestão
+        administrativa, compliance e acompanhamento operacional.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: ownerPublicKey
+          in: query
+          required: false
+          description: Identificador público do barqueiro/proprietário.
+          schema:
+            type: string
+            example: owner_01JABCDEF1234567890
+        - name: boatPublicKey
+          in: query
+          required: false
+          description: Identificador público da embarcação.
+          schema:
+            type: string
+            example: boat_01JABCDEF1234567890
+      responses:
+        '200':
+          description: Relatório de pendências retornado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingItemsReportResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Identificador de correlação da requisição para rastreabilidade.
+      schema:
+        type: string
+        maxLength: 100
+        example: 4f5d6e7a-8b9c-40de-9f12-34567890abcd
+    MediaPublicKeyPath:
+      name: mediaPublicKey
+      in: path
+      required: true
+      description: Identificador público da mídia.
+      schema:
+        type: string
+        example: med_01JABCDEF1234567890
+    DocumentPublicKeyPath:
+      name: documentPublicKey
+      in: path
+      required: true
+      description: Identificador público do documento.
+      schema:
+        type: string
+        example: doc_01JABCDEF1234567890
+    EntityTypePath:
+      name: entityType
+      in: path
+      required: true
+      description: Tipo da entidade de negócio relacionada.
+      schema:
+        $ref: '#/components/schemas/EntityType'
+    EntityIdPath:
+      name: entityId
+      in: path
+      required: true
+      description: Identificador da entidade de negócio relacionada.
+      schema:
+        type: string
+        format: uuid
+        example: 6d0edc6f-4471-41bc-bd33-d8fb2a84f42e
+    EntityTypeQuery:
+      name: entityType
+      in: query
+      required: false
+      description: Tipo da entidade de negócio relacionada.
+      schema:
+        $ref: '#/components/schemas/EntityType'
+    EntityIdQuery:
+      name: entityId
+      in: query
+      required: false
+      description: Identificador da entidade de negócio relacionada.
+      schema:
+        type: string
+        format: uuid
+    MediaTypeQuery:
+      name: mediaType
+      in: query
+      required: false
+      description: Tipo da mídia.
+      schema:
+        $ref: '#/components/schemas/MediaType'
+    PurposeQuery:
+      name: purpose
+      in: query
+      required: false
+      description: Finalidade de uso do item.
+      schema:
+        $ref: '#/components/schemas/AcervoPurpose'
+    VisibilityQuery:
+      name: visibility
+      in: query
+      required: false
+      description: Visibilidade do item.
+      schema:
+        $ref: '#/components/schemas/AcervoVisibility'
+    StatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Status do item.
+      schema:
+        $ref: '#/components/schemas/AcervoStatus'
+    OnlyPublishedQuery:
+      name: onlyPublished
+      in: query
+      required: false
+      description: Quando true, retorna apenas mídias publicadas.
+      schema:
+        type: boolean
+        default: true
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: Número da página, iniciando em zero.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+        example: 0
+    SizeQuery:
+      name: size
+      in: query
+      required: false
+      description: Quantidade de itens por página.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+    SortQuery:
+      name: sort
+      in: query
+      required: false
+      description: Ordenação no formato campo,direção.
+      schema:
+        type: string
+        example: createdAt,desc
+  responses:
+    BadRequest:
+      description: Requisição inválida.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Token ausente, inválido ou expirado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Usuário autenticado sem permissão para a operação.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Recurso não encontrado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Operação conflitante com o estado atual do recurso.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    PayloadTooLarge:
+      description: Arquivo enviado excede o tamanho permitido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    UnsupportedMediaType:
+      description: Tipo de arquivo não permitido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    UnprocessableEntity:
+      description: Requisição sintaticamente válida, mas rejeitada por regra de negócio.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+  schemas:
+    MediaUploadRequest:
+      type: object
+      required:
+        - file
+        - entityType
+        - entityId
+        - mediaType
+        - purpose
+        - visibility
+        - uploadedBy
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Arquivo de imagem ou vídeo enviado para quarentena.
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        entityId:
+          type: string
+          format: uuid
+          description: Identificador interno da entidade relacionada.
+          example: 6d0edc6f-4471-41bc-bd33-d8fb2a84f42e
+        ownerPublicKey:
+          type: string
+          description: Identificador público do barqueiro/proprietário, quando aplicável.
+          example: owner_01JABCDEF1234567890
+        boatPublicKey:
+          type: string
+          description: Identificador público da embarcação, quando aplicável.
+          example: boat_01JABCDEF1234567890
+        accommodationCode:
+          type: string
+          description: Código da acomodação ou ambiente do barco.
+          example: camarote
+        mediaType:
+          $ref: '#/components/schemas/MediaType'
+        purpose:
+          $ref: '#/components/schemas/AcervoPurpose'
+        visibility:
+          $ref: '#/components/schemas/AcervoVisibility'
+        title:
+          type: string
+          maxLength: 180
+          description: Título funcional da mídia.
+          example: Camarote principal do barco Estrela do Amazonas
+        description:
+          type: string
+          maxLength: 1000
+          description: Descrição complementar da mídia.
+          example: Foto enviada pelo barqueiro para demonstrar a acomodação do camarote.
+        uploadedBy:
+          $ref: '#/components/schemas/ActorReference'
+        rightsDeclaration:
+          $ref: '#/components/schemas/RightsDeclarationRequest'
+    PrivateDocumentUploadRequest:
+      type: object
+      required:
+        - file
+        - entityType
+        - entityId
+        - documentTypeCode
+        - uploadedBy
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Arquivo documental privado.
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        entityId:
+          type: string
+          format: uuid
+          description: Identificador interno da entidade relacionada.
+        documentTypeCode:
+          type: string
+          description: Código do tipo documental.
+          example: LICENCA_OPERACAO
+        documentNumber:
+          type: string
+          maxLength: 100
+          description: Número do documento, quando aplicável.
+          example: ABC-2026-001
+        issuer:
+          type: string
+          maxLength: 150
+          description: Órgão ou entidade emissora.
+          example: Autoridade Marítima
+        issuedAt:
+          type: string
+          format: date
+          description: Data de emissão do documento.
+          example: 2026-01-15
+        expiresAt:
+          type: string
+          format: date
+          description: Data de validade do documento, quando aplicável.
+          example: 2027-01-15
+        uploadedBy:
+          $ref: '#/components/schemas/ActorReference'
+    MediaItemResponse:
+      type: object
+      required:
+        - mediaPublicKey
+        - mediaType
+        - entityType
+        - entityId
+        - purpose
+        - visibility
+        - status
+        - files
+        - createdAt
+        - updatedAt
+      properties:
+        mediaPublicKey:
+          type: string
+          description: Identificador público da mídia.
+          example: med_01JABCDEF1234567890
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        entityId:
+          type: string
+          format: uuid
+          description: Identificador interno da entidade vinculada.
+        ownerPublicKey:
+          type: string
+          description: Identificador público do proprietário.
+          example: owner_01JABCDEF1234567890
+        boatPublicKey:
+          type: string
+          description: Identificador público da embarcação.
+          example: boat_01JABCDEF1234567890
+        accommodationCode:
+          type: string
+          description: Código do ambiente ou acomodação.
+          example: camarote
+        mediaType:
+          $ref: '#/components/schemas/MediaType'
+        purpose:
+          $ref: '#/components/schemas/AcervoPurpose'
+        visibility:
+          $ref: '#/components/schemas/AcervoVisibility'
+        status:
+          $ref: '#/components/schemas/AcervoStatus'
+        title:
+          type: string
+          description: Título da mídia.
+          example: Camarote principal
+        description:
+          type: string
+          description: Descrição da mídia.
+          example: Foto da acomodação do camarote principal.
+        main:
+          type: boolean
+          description: Indica se é a mídia principal da entidade.
+          example: true
+        displayOrder:
+          type: integer
+          description: Ordem de exibição.
+          example: 1
+        rejectionReasonCode:
+          type: string
+          nullable: true
+          description: Código de reprovação, quando aplicável.
+          example: DIREITO_USO_NAO_COMPROVADO
+        rejectionReasonDescription:
+          type: string
+          nullable: true
+          description: Descrição do motivo de reprovação.
+          example: Não foi comprovado direito de uso da imagem.
+        files:
+          type: array
+          description: Arquivos físicos ou variantes associados à mídia.
+          items:
+            $ref: '#/components/schemas/AcervoFileResponse'
+        rights:
+          $ref: '#/components/schemas/RightsDeclarationResponse'
+        createdAt:
+          type: string
+          format: date-time
+          description: Data e hora de criação do registro.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Data e hora da última atualização.
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data e hora de aprovação, quando aplicável.
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data e hora de publicação, quando aplicável.
+    PrivateDocumentResponse:
+      type: object
+      required:
+        - documentPublicKey
+        - entityType
+        - entityId
+        - documentTypeCode
+        - status
+        - visibility
+        - createdAt
+        - updatedAt
+      properties:
+        documentPublicKey:
+          type: string
+          description: Identificador público do documento.
+          example: doc_01JABCDEF1234567890
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        entityId:
+          type: string
+          format: uuid
+          description: Identificador interno da entidade relacionada.
+        documentTypeCode:
+          type: string
+          description: Código do tipo documental.
+          example: LICENCA_OPERACAO
+        documentTypeName:
+          type: string
+          description: Nome do tipo documental.
+          example: Licença de Operação
+        documentNumber:
+          type: string
+          nullable: true
+          description: Número do documento.
+          example: ABC-2026-001
+        issuer:
+          type: string
+          nullable: true
+          description: Órgão emissor.
+          example: Autoridade Marítima
+        issuedAt:
+          type: string
+          format: date
+          nullable: true
+          description: Data de emissão.
+        expiresAt:
+          type: string
+          format: date
+          nullable: true
+          description: Data de validade.
+        expired:
+          type: boolean
+          description: Indica se o documento está vencido.
+          example: false
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        visibility:
+          $ref: '#/components/schemas/AcervoVisibility'
+        file:
+          $ref: '#/components/schemas/AcervoFileResponse'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+    AcervoFileResponse:
+      type: object
+      required:
+        - variant
+        - bucketType
+        - objectPath
+        - mimeType
+        - sizeBytes
+      properties:
+        variant:
+          type: string
+          description: Variante do arquivo.
+          enum:
+            - ORIGINAL
+            - THUMB
+            - CARD
+            - GALLERY
+            - BANNER
+            - SLIDE
+            - VIDEO_THUMBNAIL
+            - VIDEO_PREVIEW
+            - VIDEO_STREAMING
+            - DOCUMENT_ORIGINAL
+          example: CARD
+        bucketType:
+          type: string
+          description: Tipo lógico do bucket.
+          enum:
+            - QUARANTINE
+            - PUBLIC_MEDIA
+            - PRIVATE_DOCUMENTS
+          example: PUBLIC_MEDIA
+        objectPath:
+          type: string
+          description: Caminho lógico do objeto no bucket, sem CPF/CNPJ.
+          example: owners/owner_01JABCDEF1234567890/boats/boat_01JABCDEF1234567890/accommodations/camarote/images/card/med_01JABCDEF1234567890.webp
+        cdnUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL CDN, somente para mídia pública publicada.
+          example: https://cdn.viafluvial.com.br/owners/owner_01JABCDEF1234567890/boats/boat_01JABCDEF1234567890/accommodations/camarote/images/card/med_01JABCDEF1234567890.webp
+        mimeType:
+          type: string
+          description: Tipo MIME do arquivo.
+          example: image/webp
+        sizeBytes:
+          type: integer
+          format: int64
+          description: Tamanho do arquivo em bytes.
+          example: 245760
+        width:
+          type: integer
+          nullable: true
+          description: Largura em pixels, para imagem ou vídeo.
+          example: 1200
+        height:
+          type: integer
+          nullable: true
+          description: Altura em pixels, para imagem ou vídeo.
+          example: 800
+        durationSeconds:
+          type: integer
+          nullable: true
+          description: Duração do vídeo em segundos.
+          example: 45
+        checksum:
+          type: string
+          nullable: true
+          description: Hash ou checksum usado para integridade e deduplicação.
+          example: sha256:abc123
+    ApprovalDecisionRequest:
+      type: object
+      required:
+        - decidedBy
+      properties:
+        decidedBy:
+          $ref: '#/components/schemas/ActorReference'
+        observation:
+          type: string
+          maxLength: 1000
+          description: Observação administrativa da decisão.
+          example: Conteúdo validado e apto para publicação.
+    RejectionDecisionRequest:
+      type: object
+      required:
+        - decidedBy
+        - reasonCode
+      properties:
+        decidedBy:
+          $ref: '#/components/schemas/ActorReference'
+        reasonCode:
+          type: string
+          description: Código padronizado do motivo de reprovação.
+          example: DIREITO_USO_NAO_COMPROVADO
+        observation:
+          type: string
+          maxLength: 1000
+          description: Observação administrativa complementar.
+          example: A imagem aparenta ser de terceiro e não há autorização anexada.
+    PublishMediaRequest:
+      type: object
+      properties:
+        publishedBy:
+          $ref: '#/components/schemas/ActorReference'
+        makeAvailableOnCdn:
+          type: boolean
+          description: Indica se a mídia deve ficar disponível via CDN.
+          default: true
+        observation:
+          type: string
+          maxLength: 1000
+          description: Observação administrativa da publicação.
+    BlockMediaRequest:
+      type: object
+      required:
+        - blockedBy
+        - reasonCode
+      properties:
+        blockedBy:
+          $ref: '#/components/schemas/ActorReference'
+        reasonCode:
+          type: string
+          description: Código do motivo de bloqueio.
+          example: RECLAMACAO_DIREITO_IMAGEM
+        observation:
+          type: string
+          maxLength: 1000
+          description: Observação administrativa do bloqueio.
+    ArchiveRequest:
+      type: object
+      properties:
+        archivedBy:
+          $ref: '#/components/schemas/ActorReference'
+        reason:
+          type: string
+          maxLength: 500
+          description: Motivo do arquivamento.
+          example: Mídia substituída por versão mais recente.
+    SetMainMediaRequest:
+      type: object
+      required:
+        - main
+        - changedBy
+      properties:
+        main:
+          type: boolean
+          description: Define se a mídia será principal.
+          example: true
+        changedBy:
+          $ref: '#/components/schemas/ActorReference'
+    UpdateOrderRequest:
+      type: object
+      required:
+        - displayOrder
+        - changedBy
+      properties:
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Nova ordem de exibição.
+          example: 2
+        changedBy:
+          $ref: '#/components/schemas/ActorReference'
+    SignedUrlRequest:
+      type: object
+      properties:
+        requestedBy:
+          $ref: '#/components/schemas/ActorReference'
+        expiresInSeconds:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          default: 300
+          description: Tempo de expiração da URL assinada em segundos.
+          example: 300
+        purpose:
+          type: string
+          maxLength: 150
+          description: Finalidade da geração da URL assinada.
+          example: Visualização administrativa do documento
+    SignedUrlResponse:
+      type: object
+      required:
+        - signedUrl
+        - expiresAt
+        - correlationId
+      properties:
+        signedUrl:
+          type: string
+          format: uri
+          description: URL temporária para acesso ao documento privado.
+          example: https://storage.googleapis.com/private-documents/example?X-Goog-Signature=...
+        expiresAt:
+          type: string
+          format: date-time
+          description: Data e hora de expiração da URL.
+        correlationId:
+          type: string
+          description: Identificador de correlação da operação.
+    DecisionResponse:
+      type: object
+      required:
+        - code
+        - message
+        - resourcePublicKey
+        - status
+        - correlationId
+        - timestamp
+      properties:
+        code:
+          type: string
+          description: Código de sucesso da decisão.
+          example: MEDIA_APPROVED
+        message:
+          type: string
+          description: Mensagem curta da decisão.
+          example: Mídia aprovada com sucesso.
+        resourcePublicKey:
+          type: string
+          description: Identificador público do recurso afetado.
+          example: med_01JABCDEF1234567890
+        status:
+          type: string
+          description: Novo status do recurso.
+          example: APROVADO
+        correlationId:
+          type: string
+          description: Identificador de correlação da operação.
+        timestamp:
+          type: string
+          format: date-time
+          description: Data e hora da decisão.
+    RightsDeclarationRequest:
+      type: object
+      required:
+        - sourceType
+        - responsibleDeclaration
+      properties:
+        sourceType:
+          $ref: '#/components/schemas/MediaSourceType'
+        authorName:
+          type: string
+          maxLength: 255
+          description: Nome do autor ou responsável pela mídia, quando informado.
+          example: João da Silva
+        responsibleDeclaration:
+          type: boolean
+          description: Declaração de responsabilidade do usuário pelo direito de uso da mídia.
+          example: true
+        allowsCommercialUse:
+          type: boolean
+          description: Indica se a mídia pode ser usada comercialmente.
+          example: true
+        allowsMarketingUse:
+          type: boolean
+          description: Indica se a mídia pode ser usada em marketing.
+          example: false
+        allowsSocialMediaUse:
+          type: boolean
+          description: Indica se a mídia pode ser usada em redes sociais.
+          example: false
+        hasImageUseAuthorization:
+          type: boolean
+          description: Indica se há autorização de uso de imagem quando pessoas forem identificáveis.
+          example: true
+    RightsDeclarationResponse:
+      type: object
+      properties:
+        sourceType:
+          $ref: '#/components/schemas/MediaSourceType'
+        responsibleDeclaration:
+          type: boolean
+          description: Declaração de responsabilidade registrada.
+        allowsCommercialUse:
+          type: boolean
+          description: Permissão de uso comercial.
+        allowsMarketingUse:
+          type: boolean
+          description: Permissão de uso em marketing.
+        allowsSocialMediaUse:
+          type: boolean
+          description: Permissão de uso em redes sociais.
+        hasImageUseAuthorization:
+          type: boolean
+          description: Existência de autorização de uso de imagem.
+    ActorReference:
+      type: object
+      required:
+        - actorType
+        - actorId
+      properties:
+        actorType:
+          type: string
+          description: Tipo do ator responsável pela ação.
+          enum:
+            - USER
+            - SERVICE
+            - ADMIN
+            - BARQUEIRO
+            - AGENCIA
+          example: BARQUEIRO
+        actorId:
+          type: string
+          description: Identificador do ator.
+          example: user_01JABCDEF1234567890
+        displayName:
+          type: string
+          description: Nome de exibição do ator, quando disponível.
+          example: Barqueiro João
+    DocumentTypeResponse:
+      type: object
+      required:
+        - code
+        - name
+        - scope
+        - required
+        - requiresValidity
+        - requiresApproval
+        - active
+      properties:
+        code:
+          type: string
+          description: Código do tipo documental.
+          example: LICENCA_OPERACAO
+        name:
+          type: string
+          description: Nome do tipo documental.
+          example: Licença de Operação
+        description:
+          type: string
+          description: Descrição do documento exigido.
+          example: Documento que comprova autorização de operação da embarcação.
+        scope:
+          $ref: '#/components/schemas/DocumentScope'
+        required:
+          type: boolean
+          description: Indica se o documento é obrigatório.
+          example: true
+        requiresValidity:
+          type: boolean
+          description: Indica se o documento possui controle de validade.
+          example: true
+        requiresApproval:
+          type: boolean
+          description: Indica se o documento exige aprovação administrativa.
+          example: true
+        active:
+          type: boolean
+          description: Indica se o tipo documental está ativo.
+          example: true
+    RejectionReasonResponse:
+      type: object
+      required:
+        - code
+        - description
+        - targetType
+        - active
+      properties:
+        code:
+          type: string
+          description: Código padronizado do motivo.
+          example: DIREITO_USO_NAO_COMPROVADO
+        description:
+          type: string
+          description: Descrição do motivo.
+          example: Direito de uso da imagem não comprovado.
+        targetType:
+          type: string
+          enum:
+            - MEDIA
+            - DOCUMENT
+            - BOTH
+          description: Tipo de item ao qual o motivo se aplica.
+          example: MEDIA
+        active:
+          type: boolean
+          description: Indica se o motivo está ativo.
+          example: true
+    ApprovalQueueItem:
+      type: object
+      required:
+        - itemPublicKey
+        - itemType
+        - entityType
+        - entityId
+        - status
+        - submittedAt
+      properties:
+        itemPublicKey:
+          type: string
+          description: Identificador público do item.
+          example: med_01JABCDEF1234567890
+        itemType:
+          type: string
+          enum:
+            - MEDIA
+            - DOCUMENT
+          description: Tipo do item na fila.
+          example: MEDIA
+        entityType:
+          $ref: '#/components/schemas/EntityType'
+        entityId:
+          type: string
+          format: uuid
+          description: Identificador da entidade relacionada.
+        title:
+          type: string
+          description: Título ou nome do item.
+          example: Foto do camarote principal
+        status:
+          type: string
+          description: Status atual do item.
+          example: AGUARDANDO_APROVACAO
+        submittedAt:
+          type: string
+          format: date-time
+          description: Data de envio para análise.
+    AcervoHistoryEntry:
+      type: object
+      required:
+        - eventType
+        - statusAfter
+        - actor
+        - occurredAt
+      properties:
+        eventType:
+          type: string
+          description: Tipo de evento registrado.
+          example: MEDIA_APPROVED
+        statusBefore:
+          type: string
+          nullable: true
+          description: Status anterior.
+          example: AGUARDANDO_APROVACAO
+        statusAfter:
+          type: string
+          description: Status após o evento.
+          example: APROVADO
+        actor:
+          $ref: '#/components/schemas/ActorReference'
+        reasonCode:
+          type: string
+          nullable: true
+          description: Código de motivo, quando aplicável.
+        observation:
+          type: string
+          nullable: true
+          description: Observação do evento.
+        occurredAt:
+          type: string
+          format: date-time
+          description: Data e hora do evento.
+    PendingItemsReportResponse:
+      type: object
+      required:
+        - totalPendingMedia
+        - totalPendingDocuments
+        - totalExpiredDocuments
+        - totalBlockedItems
+      properties:
+        totalPendingMedia:
+          type: integer
+          description: Total de mídias pendentes de aprovação.
+          example: 12
+        totalPendingDocuments:
+          type: integer
+          description: Total de documentos pendentes de aprovação.
+          example: 5
+        totalExpiredDocuments:
+          type: integer
+          description: Total de documentos vencidos.
+          example: 2
+        totalBlockedItems:
+          type: integer
+          description: Total de itens bloqueados.
+          example: 1
+        generatedAt:
+          type: string
+          format: date-time
+          description: Data e hora de geração do relatório.
+    PagedMediaResponse:
+      type: object
+      required:
+        - content
+        - page
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaItemResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedPrivateDocumentResponse:
+      type: object
+      required:
+        - content
+        - page
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrivateDocumentResponse'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedApprovalQueueResponse:
+      type: object
+      required:
+        - content
+        - page
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalQueueItem'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PageMetadata:
+      type: object
+      required:
+        - number
+        - size
+        - totalElements
+        - totalPages
+      properties:
+        number:
+          type: integer
+          description: Número da página atual.
+          example: 0
+        size:
+          type: integer
+          description: Tamanho da página.
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          description: Total de elementos encontrados.
+          example: 125
+        totalPages:
+          type: integer
+          description: Total de páginas.
+          example: 7
+    EntityType:
+      type: string
+      description: Tipo de entidade de negócio vinculada ao item do acervo.
+      enum:
+        - BARQUEIRO
+        - AGENCIA
+        - EMBARCACAO
+        - ACOMODACAO
+        - CAMPANHA
+        - SITE
+        - DESTINO
+        - ADMINISTRACAO
+      example: ACOMODACAO
+    MediaType:
+      type: string
+      description: Tipo de mídia.
+      enum:
+        - IMAGE
+        - VIDEO
+      example: IMAGE
+    AcervoPurpose:
+      type: string
+      description: Finalidade de uso do item do acervo.
+      enum:
+        - VENDA
+        - GALERIA
+        - MARKETING
+        - SITE
+        - SLIDE
+        - CADASTRO
+        - COMPLIANCE
+        - CONTRATUAL
+        - OPERACIONAL
+      example: GALERIA
+    AcervoVisibility:
+      type: string
+      description: Visibilidade do item do acervo.
+      enum:
+        - PUBLICA
+        - PRIVADA
+        - INTERNA
+        - RESTRITA
+      example: PUBLICA
+    AcervoStatus:
+      type: string
+      description: Status de ciclo de vida de uma mídia.
+      enum:
+        - RASCUNHO
+        - ENVIADO
+        - EM_PROCESSAMENTO
+        - AGUARDANDO_APROVACAO
+        - APROVADO
+        - REPROVADO
+        - PUBLICADO
+        - BLOQUEADO
+        - ARQUIVADO
+        - EXPIRADO
+        - REMOVIDO
+      example: AGUARDANDO_APROVACAO
+    DocumentStatus:
+      type: string
+      description: Status de ciclo de vida de um documento privado.
+      enum:
+        - ENVIADO
+        - AGUARDANDO_APROVACAO
+        - APROVADO
+        - REPROVADO
+        - VENCIDO
+        - SUBSTITUIDO
+        - BLOQUEADO
+        - ARQUIVADO
+        - REMOVIDO
+      example: AGUARDANDO_APROVACAO
+    DocumentScope:
+      type: string
+      description: Escopo de exigência do tipo documental.
+      enum:
+        - BARQUEIRO
+        - AGENCIA
+        - EMBARCACAO
+        - ACOMODACAO
+        - CONTRATUAL
+        - OPERACIONAL
+      example: EMBARCACAO
+    MediaSourceType:
+      type: string
+      description: Origem declarada da mídia.
+      enum:
+        - ENVIADA_PELO_BARQUEIRO
+        - ENVIADA_PELA_AGENCIA
+        - PRODUZIDA_PELA_PLATAFORMA
+        - BANCO_DE_IMAGEM
+        - AGENCIA_MARKETING
+        - TERCEIRO
+      example: ENVIADA_PELO_BARQUEIRO
+    ProblemDetail:
+      type: object
+      description: Resposta de erro no padrão RFC 7807.
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+        - correlationId
+        - timestamp
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI que identifica o tipo do problema.
+          example: https://api.viafluvial.com.br/problems/business-rule-violation
+        title:
+          type: string
+          description: Título resumido do erro.
+          example: Violação de regra de negócio
+        status:
+          type: integer
+          description: Código HTTP do erro.
+          example: 422
+        detail:
+          type: string
+          description: Detalhe legível do erro.
+          example: A mídia precisa estar aprovada antes de ser publicada.
+        instance:
+          type: string
+          description: Caminho da requisição que gerou o erro.
+          example: /api/v1/acervo/media/med_01JABCDEF1234567890/publish
+        code:
+          type: string
+          description: Código interno do erro.
+          example: MEDIA_NOT_APPROVED
+        correlationId:
+          type: string
+          description: Identificador de correlação da requisição.
+          example: 4f5d6e7a-8b9c-40de-9f12-34567890abcd
+        timestamp:
+          type: string
+          format: date-time
+          description: Data e hora do erro.

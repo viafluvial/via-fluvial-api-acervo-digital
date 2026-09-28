@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS "sc-acervo-digital".private_document (
+  id UUID PRIMARY KEY,
+  document_public_key VARCHAR(80) NOT NULL UNIQUE,
+  entity_type VARCHAR(40) NOT NULL,
+  entity_id UUID NOT NULL,
+  document_type_code VARCHAR(80) NOT NULL,
+  document_type_name VARCHAR(255),
+  document_number VARCHAR(120),
+  issuer VARCHAR(255),
+  issued_at DATE,
+  expires_at DATE,
+  status VARCHAR(30) NOT NULL,
+  visibility VARCHAR(20) NOT NULL,
+  rejection_reason_code VARCHAR(120),
+  rejection_reason_description TEXT,
+  object_path TEXT NOT NULL,
+  mime_type VARCHAR(150) NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  approved_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
