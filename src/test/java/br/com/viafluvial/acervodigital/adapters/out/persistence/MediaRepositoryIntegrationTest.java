@@ -61,6 +61,7 @@ class MediaRepositoryIntegrationTest {
         testEntity.setObjectPath("acervo/media/test.jpg");
         testEntity.setMimeType("image/jpeg");
         testEntity.setSizeBytes(1024L);
+        testEntity.setPlatformShowcaseEnabled(false);
         testEntity.setCreatedAt(OffsetDateTime.now());
         testEntity.setUpdatedAt(OffsetDateTime.now());
     }
