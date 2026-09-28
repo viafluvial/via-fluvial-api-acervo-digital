@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
@@ -25,6 +26,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -69,6 +73,20 @@ public class SecurityConfig {
         }
 
         return http.build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "security.mode", havingValue = "oauth2")
+    JwtDecoder jwtDecoder(
+            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}") String jwkSetUri,
+            @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:}") String issuerUri) {
+        if (jwkSetUri != null && !jwkSetUri.isBlank()) {
+            return NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        }
+        if (issuerUri != null && !issuerUri.isBlank()) {
+            return JwtDecoders.fromIssuerLocation(issuerUri);
+        }
+        throw new IllegalStateException("JWT configuration is required when security.mode=oauth2.");
     }
 
     static final class DevHeaderAuthenticationFilter extends OncePerRequestFilter {
