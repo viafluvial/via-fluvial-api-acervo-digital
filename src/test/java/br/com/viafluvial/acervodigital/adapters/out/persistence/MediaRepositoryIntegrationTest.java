@@ -57,6 +57,10 @@ class MediaRepositoryIntegrationTest {
         testEntity.setPurpose("GALERIA");
         testEntity.setVisibility("PUBLICA");
         testEntity.setStatus("AGUARDANDO_APROVACAO");
+        testEntity.setMain(false);
+        testEntity.setObjectPath("acervo/media/test.jpg");
+        testEntity.setMimeType("image/jpeg");
+        testEntity.setSizeBytes(1024L);
         testEntity.setCreatedAt(OffsetDateTime.now());
         testEntity.setUpdatedAt(OffsetDateTime.now());
     }
