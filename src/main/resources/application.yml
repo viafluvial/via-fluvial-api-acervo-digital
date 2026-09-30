@@ -56,10 +56,11 @@ springdoc:
     path: /swagger-ui.html
     disable-swagger-default-url: true
     urls:
-      - name: runtime
+      - name: OpenAPI (runtime - JSON)
         url: /v3/api-docs
-      - name: static
+      - name: OpenAPI (estático - YAML)
         url: /openapi/openapi.yaml
+    urls-primary-name: OpenAPI (runtime - JSON)
 
 security:
   mode: ${SECURITY_MODE:oauth2}

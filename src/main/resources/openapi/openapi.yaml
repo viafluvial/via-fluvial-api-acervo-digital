@@ -9,7 +9,7 @@ info:
     url: https://viafluvial.com.br
 servers:
   - url: /acervo-digital/api/v1
-    description: Runtime de Desenvolvimento
+    description: Entrypoint padrao no API Gateway (Gravitee).
   - url: https://api-acervo-digital.hml.viafluvial.com.br/api/v1
     description: Runtime de Homologação
   - url: https://api-acervo-digital.prd.viafluvial.com.br/api/v1
