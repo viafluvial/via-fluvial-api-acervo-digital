@@ -13,13 +13,21 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ImageDerivativeService {
+
+    // ImageIO's default JPEG quality (0.75) leaves visible artifacts on large hero/banner images.
+    private static final float JPEG_QUALITY = 0.9f;
 
     private static final Map<AcervoFileResponse.VariantEnum, int[]> VARIANT_DIMENSIONS = Map.of(
         AcervoFileResponse.VariantEnum.THUMB, new int[] {200, 200},
@@ -81,18 +89,13 @@ public class ImageDerivativeService {
     }
 
     private BufferedImage resizeKeepAspect(BufferedImage source, int targetWidth, int targetHeight) {
-        double sourceAspect = (double) source.getWidth() / source.getHeight();
-        double targetAspect = (double) targetWidth / targetHeight;
-
-        int width;
-        int height;
-        if (sourceAspect > targetAspect) {
-            width = targetWidth;
-            height = (int) Math.round(targetWidth / sourceAspect);
-        } else {
-            height = targetHeight;
-            width = (int) Math.round(targetHeight * sourceAspect);
-        }
+        // Never enlarge: upscaled variants only add bytes without adding detail.
+        double scale = Math.min(1.0, Math.min(
+            (double) targetWidth / source.getWidth(),
+            (double) targetHeight / source.getHeight()
+        ));
+        int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+        int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
 
         Image tmp = source.getScaledInstance(width, height, Image.SCALE_SMOOTH);
         BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -107,6 +110,10 @@ public class ImageDerivativeService {
 
     private byte[] encode(BufferedImage image, String format) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            if ("jpeg".equals(format)) {
+                writeJpeg(image, out);
+                return out.toByteArray();
+            }
             boolean wrote = ImageIO.write(image, format, out);
             if (!wrote) {
                 throw new DomainException("UNSUPPORTED_IMAGE_FORMAT", "Formato de imagem não suportado para processamento.", 422);
@@ -114,6 +121,24 @@ public class ImageDerivativeService {
             return out.toByteArray();
         } catch (IOException ex) {
             throw new DomainException("IMAGE_PROCESSING_ERROR", "Falha ao processar imagem.", 500);
+        }
+    }
+
+    private void writeJpeg(BufferedImage image, ByteArrayOutputStream out) throws IOException {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+        if (!writers.hasNext()) {
+            throw new DomainException("UNSUPPORTED_IMAGE_FORMAT", "Formato de imagem não suportado para processamento.", 422);
+        }
+
+        ImageWriter writer = writers.next();
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(JPEG_QUALITY);
+        try (ImageOutputStream imageOut = ImageIO.createImageOutputStream(out)) {
+            writer.setOutput(imageOut);
+            writer.write(null, new IIOImage(image, null, null), param);
+        } finally {
+            writer.dispose();
         }
     }
 

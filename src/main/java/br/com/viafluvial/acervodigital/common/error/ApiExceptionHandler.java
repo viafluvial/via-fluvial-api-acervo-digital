@@ -93,6 +93,10 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<org.springframework.http.ProblemDetail> handleUnexpected(Exception ex, HttpServletRequest request) {
+        if (ex instanceof org.springframework.web.ErrorResponse errorResponse) {
+            // Framework errors (unknown route, method, media type, parameters) keep their own status.
+            return ResponseEntity.status(errorResponse.getStatusCode()).body(errorResponse.getBody());
+        }
         String reason = ex.getClass().getSimpleName() + (ex.getMessage() != null && !ex.getMessage().isBlank() ? ": " + ex.getMessage() : "");
         LOGGER.error("Erro inesperado em {} {} -> {}", request.getMethod(), request.getRequestURI(), reason, ex);
         org.springframework.http.ProblemDetail problem = org.springframework.http.ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno inesperado.");

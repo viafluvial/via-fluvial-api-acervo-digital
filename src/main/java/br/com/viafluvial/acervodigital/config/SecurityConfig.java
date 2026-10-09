@@ -14,6 +14,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import br.com.viafluvial.acervodigital.platformsecurity.PlatformSecurity;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -60,16 +61,20 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
+        DevHeaderAuthenticationFilter headerFilter = new DevHeaderAuthenticationFilter(devToken);
         if ("oauth2".equalsIgnoreCase(securityMode)) {
             http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**", "/openapi/**", "/acervo/public/**").permitAll()
                     .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                // Platform tokens verified by PlatformIdentityFilter authenticate through their trusted headers.
+                .addFilterBefore(PlatformSecurity.verifiedOnly(headerFilter), BasicAuthenticationFilter.class);
         } else {
             http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**", "/openapi/**", "/acervo/public/**").permitAll()
                 .anyRequest().authenticated())
-                .addFilterBefore(new DevHeaderAuthenticationFilter(devToken), BasicAuthenticationFilter.class);
+                .addFilterBefore(PlatformSecurity.headerAuthentication(securityMode, headerFilter), BasicAuthenticationFilter.class);
+            PlatformSecurity.configureEntryPoint(http, securityMode);
         }
 
         return http.build();

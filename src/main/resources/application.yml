@@ -109,3 +109,13 @@ acervo:
       - application/pdf
       - application/msword
       - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+platform:
+  security:
+    mode: ${security.mode:oauth2}
+    jwk-set-uri: ${PLATFORM_JWT_JWK_SET_URI:}
+    issuer: ${PLATFORM_JWT_ISSUER:}
+    audience: ${PLATFORM_JWT_AUDIENCE:via-fluvial-platform}
+    service-token: ${PLATFORM_SERVICE_TOKEN:}
+    service-name: api-acervo-digital
+    boatman-scoped: true
