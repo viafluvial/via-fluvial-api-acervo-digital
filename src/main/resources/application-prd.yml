@@ -10,3 +10,7 @@ logging:
 acervo:
   storage:
     provider: ${ACERVO_STORAGE_PROVIDER:gcp}
+
+integrations:
+  vessels:
+    base-url: ${VESSELS_BASE_URL:${API_EMBARCACOES_BASE_URL:https://api-embarcacoes.api.plataforma.prd.viafluvial.com.br}}
